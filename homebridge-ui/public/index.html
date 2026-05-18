@@ -1,0 +1,381 @@
+<style>
+  .vizio-device-bar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: end;
+  }
+
+  .vizio-device-select {
+    flex: 1 1 auto;
+    min-width: 12rem;
+  }
+
+  .vizio-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .vizio-status {
+    min-height: 1.5rem;
+  }
+</style>
+
+<div class="container-fluid px-0">
+  <form id="config-form">
+    <div class="mb-3">
+      <label class="form-label" for="platformName">Platform Name</label>
+      <input class="form-control" id="platformName" name="platformName" autocomplete="off" required>
+    </div>
+
+    <div class="mb-3 vizio-device-bar">
+      <div class="vizio-device-select">
+        <label class="form-label" for="deviceSelector">Display</label>
+        <select class="form-select" id="deviceSelector"></select>
+      </div>
+      <button class="btn btn-secondary" id="add-device" type="button">Add Display</button>
+      <button class="btn btn-outline-danger" id="remove-device" type="button">Remove</button>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="deviceName">Display Name</label>
+      <input class="form-control" id="deviceName" name="deviceName" autocomplete="off" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="address">Display Address</label>
+      <input class="form-control" id="address" name="address" autocomplete="off" placeholder="192.168.1.59 or viziocasttv.local" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="token">Access Token</label>
+      <input class="form-control" id="token" name="token" autocomplete="off" type="password">
+    </div>
+
+    <div class="row">
+      <div class="mb-3 col-12 col-md-6">
+        <label class="form-label" for="mac">MAC Address</label>
+        <input class="form-control" id="mac" name="mac" autocomplete="off" placeholder="00:11:22:33:44:55">
+      </div>
+
+      <div class="mb-3 col-12 col-md-6">
+        <label class="form-label" for="broadcastAddress">Wake-on-LAN Broadcast Address</label>
+        <input class="form-control" id="broadcastAddress" name="broadcastAddress" autocomplete="off" placeholder="255.255.255.255">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="mb-3 col-12 col-md-6">
+        <label class="form-label" for="requestTimeout">Request Timeout</label>
+        <input class="form-control" id="requestTimeout" name="requestTimeout" min="1000" max="30000" step="500" type="number">
+      </div>
+
+      <div class="mb-3 col-12 col-md-6">
+        <label class="form-label" for="powerOnDelay">Power On Delay</label>
+        <input class="form-control" id="powerOnDelay" name="powerOnDelay" min="0" max="30000" step="500" type="number">
+      </div>
+    </div>
+
+  </form>
+
+  <hr>
+
+  <div class="mb-3">
+    <label class="form-label" for="pin">Pairing PIN</label>
+    <input class="form-control" id="pin" inputmode="numeric" autocomplete="one-time-code" placeholder="1234">
+  </div>
+
+  <div class="vizio-actions mb-2">
+    <button class="btn btn-primary" id="start-pairing" type="button">Start Pairing</button>
+    <button class="btn btn-primary" id="finish-pairing" type="button" disabled>Complete Pairing</button>
+    <button class="btn btn-secondary" id="test-connection" type="button">Test Connection</button>
+  </div>
+
+  <div class="vizio-status text-muted" id="status" role="status"></div>
+</div>
+
+<script>
+  (() => {
+    const DEFAULT_DEVICE = {
+      name: 'Vizio Display',
+      address: '',
+      token: '',
+      mac: '',
+      broadcastAddress: '255.255.255.255',
+      requestTimeout: 5000,
+      powerOnDelay: 10000,
+    };
+    const DEFAULT_CONFIG = {
+      platform: 'VizioDisplay',
+      name: 'Homebridge Vizio',
+      devices: [{ ...DEFAULT_DEVICE }],
+    };
+
+    const form = document.getElementById('config-form');
+    const platformNameInput = document.getElementById('platformName');
+    const deviceSelector = document.getElementById('deviceSelector');
+    const pinInput = document.getElementById('pin');
+    const status = document.getElementById('status');
+    const addDeviceButton = document.getElementById('add-device');
+    const removeDeviceButton = document.getElementById('remove-device');
+    const startPairingButton = document.getElementById('start-pairing');
+    const finishPairingButton = document.getElementById('finish-pairing');
+    const testConnectionButton = document.getElementById('test-connection');
+
+    let configBlocks = [];
+    let config = clone(DEFAULT_CONFIG);
+    let selectedIndex = 0;
+    let pairing = null;
+
+    window.homebridge.addEventListener('ready', async () => {
+      configBlocks = await window.homebridge.getPluginConfig();
+      config = normalizeConfig(configBlocks[0]);
+      render();
+      await updateConfig();
+    });
+
+    form.addEventListener('input', () => {
+      saveCurrentDeviceFromForm();
+      updateConfig();
+    });
+
+    platformNameInput.addEventListener('input', () => {
+      config.name = platformNameInput.value || DEFAULT_CONFIG.name;
+      updateConfig();
+    });
+
+    deviceSelector.addEventListener('change', () => {
+      saveCurrentDeviceFromForm();
+      selectedIndex = Number(deviceSelector.value) || 0;
+      pairing = null;
+      render();
+      updateConfig();
+    });
+
+    addDeviceButton.addEventListener('click', () => {
+      saveCurrentDeviceFromForm();
+      config.devices.push({ ...DEFAULT_DEVICE, name: `Vizio Display ${config.devices.length + 1}` });
+      selectedIndex = config.devices.length - 1;
+      pairing = null;
+      render();
+      updateConfig();
+    });
+
+    removeDeviceButton.addEventListener('click', () => {
+      if (config.devices.length <= 1) {
+        return;
+      }
+
+      config.devices.splice(selectedIndex, 1);
+      selectedIndex = Math.max(0, selectedIndex - 1);
+      pairing = null;
+      render();
+      updateConfig();
+    });
+
+    startPairingButton.addEventListener('click', async () => {
+      saveCurrentDeviceFromForm();
+      const device = currentDevice();
+
+      if (!device.address) {
+        showError(new Error('Enter the display address first.'));
+        return;
+      }
+
+      setBusy(true);
+      setStatus('Starting pairing...');
+
+      try {
+        pairing = await requestWithTimeout('/pair/start', device);
+        finishPairingButton.disabled = false;
+        setStatus('Enter the PIN shown on the display.');
+      } catch (error) {
+        pairing = null;
+        finishPairingButton.disabled = true;
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    finishPairingButton.addEventListener('click', async () => {
+      saveCurrentDeviceFromForm();
+      const device = currentDevice();
+
+      setBusy(true);
+      setStatus('Completing pairing...');
+
+      try {
+        const result = await requestWithTimeout('/pair/finish', {
+          ...device,
+          pin: pinInput.value,
+          deviceId: pairing && pairing.deviceId,
+          pairingRequestToken: pairing && pairing.pairingRequestToken,
+        });
+
+        device.token = result.token;
+        render();
+        await updateConfig();
+        window.homebridge.enableSaveButton();
+        window.homebridge.toast.success('Vizio access token added. Click Save to write the config.', 'Pairing Complete');
+        setStatus('Pairing complete. Click Save to write the config.');
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    testConnectionButton.addEventListener('click', async () => {
+      saveCurrentDeviceFromForm();
+      const device = currentDevice();
+
+      setBusy(true);
+      setStatus('Testing connection...');
+
+      try {
+        const result = await requestWithTimeout('/test', device);
+        const state = result.active ? 'active' : 'inactive';
+        setStatus(result.detail || `Display responded and is ${state}.`);
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    function normalizeConfig(rawConfig) {
+      const nextConfig = {
+        ...clone(DEFAULT_CONFIG),
+        ...(rawConfig || {}),
+        platform: 'VizioDisplay',
+      };
+
+      if (!Array.isArray(nextConfig.devices) || nextConfig.devices.length === 0) {
+        nextConfig.devices = [{ ...DEFAULT_DEVICE }];
+      } else {
+        nextConfig.devices = nextConfig.devices.map((device) => ({
+          ...DEFAULT_DEVICE,
+          ...device,
+        }));
+      }
+
+      return nextConfig;
+    }
+
+    function render() {
+      selectedIndex = Math.min(selectedIndex, config.devices.length - 1);
+      platformNameInput.value = config.name || DEFAULT_CONFIG.name;
+      renderDeviceSelector();
+      fillDeviceForm(currentDevice());
+      removeDeviceButton.disabled = config.devices.length <= 1;
+      finishPairingButton.disabled = !pairing;
+    }
+
+    function renderDeviceSelector() {
+      deviceSelector.innerHTML = '';
+
+      config.devices.forEach((device, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = device.name || `Display ${index + 1}`;
+        option.selected = index === selectedIndex;
+        deviceSelector.appendChild(option);
+      });
+    }
+
+    function fillDeviceForm(device) {
+      const values = {
+        deviceName: device.name,
+        address: device.address,
+        token: device.token,
+        mac: device.mac,
+        broadcastAddress: device.broadcastAddress,
+        requestTimeout: device.requestTimeout,
+        powerOnDelay: device.powerOnDelay,
+      };
+
+      for (const [key, value] of Object.entries(values)) {
+        const input = form.elements[key];
+
+        if (input) {
+          if (input.type === 'checkbox') {
+            input.checked = Boolean(value);
+          } else {
+            input.value = value == null ? '' : value;
+          }
+        }
+      }
+    }
+
+    function saveCurrentDeviceFromForm() {
+      const device = currentDevice();
+      const data = new FormData(form);
+
+      device.name = data.get('deviceName') || DEFAULT_DEVICE.name;
+      device.address = data.get('address') || '';
+      device.token = data.get('token') || '';
+      device.mac = data.get('mac') || '';
+      device.broadcastAddress = data.get('broadcastAddress') || DEFAULT_DEVICE.broadcastAddress;
+      device.requestTimeout = numberOrDefault(data.get('requestTimeout'), DEFAULT_DEVICE.requestTimeout);
+      device.powerOnDelay = numberOrDefault(data.get('powerOnDelay'), DEFAULT_DEVICE.powerOnDelay);
+      config.name = platformNameInput.value || DEFAULT_CONFIG.name;
+
+      renderDeviceSelector();
+    }
+
+    function currentDevice() {
+      return config.devices[selectedIndex];
+    }
+
+    async function updateConfig() {
+      const nextBlocks = [config, ...configBlocks.slice(1)];
+      configBlocks = nextBlocks;
+      await window.homebridge.updatePluginConfig(nextBlocks);
+    }
+
+    async function requestWithTimeout(path, payload) {
+      const timeout = Math.max(8000, numberOrDefault(payload.requestTimeout, DEFAULT_DEVICE.requestTimeout) + 3000);
+
+      return Promise.race([
+        window.homebridge.request(path, payload),
+        new Promise((resolve, reject) => {
+          setTimeout(() => reject(new Error('Timed out waiting for the display.')), timeout);
+        }),
+      ]);
+    }
+
+    function numberOrDefault(value, fallback) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function setBusy(busy) {
+      addDeviceButton.disabled = busy;
+      removeDeviceButton.disabled = busy || config.devices.length <= 1;
+      startPairingButton.disabled = busy;
+      testConnectionButton.disabled = busy;
+      finishPairingButton.disabled = busy || !pairing;
+
+      if (busy) {
+        window.homebridge.showSpinner();
+      } else {
+        window.homebridge.hideSpinner();
+      }
+    }
+
+    function setStatus(message) {
+      status.textContent = message || '';
+    }
+
+    function showError(error) {
+      const message = error && error.message ? error.message : String(error);
+      window.homebridge.toast.error(message, 'Vizio');
+      setStatus(message);
+    }
+
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+  })();
+</script>

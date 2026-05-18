@@ -1,51 +1,68 @@
-## Deprecating homebridge-vizio
-Now that Vizio [supports HomeKit and AirPlay 2 natively](https://www.vizio.com/apple), I'm no longer planning on supporting this plugin. It may still be useful for displays that didn't receive first-party support, so it'll remain available. Can't guarantee that I'll be able to address any new issues.
-
 # homebridge-vizio
-A Homebridge plugin for controlling your Vizio Smartcast display using HomeKit or Siri. [What can I do with it?](#controlling-your-display)
 
-## Getting Started
-You'll need to install [Homebridge](https://github.com/nfarina/homebridge) first:
+A Homebridge plugin for exposing a Vizio SmartCast display as an external HomeKit Television accessory.
 
-````
-sudo npm install -g homebridge
-````
+## What it does
 
-Then, install `homebridge-vizio`:
+- Publishes the display as a separate external HomeKit TV accessory.
+- Maps HomeKit TV power to Vizio SmartCast power commands.
+- Maps basic Control Center remote buttons to Vizio remote key commands.
+- Adds a simple Homebridge UI setup flow for SmartCast pairing.
+- Supports optional Wake-on-LAN for displays that sleep their HTTP API.
 
-````
+## Setup
+
+Install Homebridge first, then install this plugin:
+
+```bash
 npm install homebridge-vizio
-````
+```
 
-## Setting Up
-To configure `homebridge-vizio`, you'll need to know the LAN IP address or hostname of your display. You can find this in the SmartCast app, or on the display's menu.
+Configure the plugin from the Homebridge UI. The settings screen can start pairing, accept the PIN shown on the display, save the access token, and test communication.
 
-**Note**: it's recommended that you use the display's hostname, as it isn't likely to change like it's IP address will. The default hostname appears to be `viziocasttv.local`.
+The generated platform config looks like this:
 
-You'll need to pair your display with Homebridge so your display will accept commands to control it. `homebridge-vizio` comes with a helpful setup script that walks you through the process. To use it, use:
-
-````
-node node_modules/homebridge-vizio/setup.js
-````
-
-You'll be asked for the IP address of your display (try using `viziocasttv.local` if you don't know it), then for the PIN code that the display shows on-screen. Then, you'll be shown an "access token"; copy the token, you'll need it in a moment.
-
-## Configuring Homebridge
-Homebridge uses a [JSON file](https://github.com/nfarina/homebridge#quick-overview) to determine what accessories are exposed to HomeKit. Add the following entry to your `config.json`:
-
-````
-"accessories": [
+```json
+{
+  "platform": "VizioDisplay",
+  "name": "Homebridge Vizio",
+  "devices": [
     {
-        "accessory": "VizioDisplay",
-        "name": "Whatever Name You Want",
-        "token": "YOUR ACCESS TOKEN",
-        "address": "YOUR DISPLAY'S IP ADDRESS"
+      "name": "Living Room TV",
+      "address": "viziocasttv.local",
+      "token": "YOUR ACCESS TOKEN",
+      "mac": "00:11:22:33:44:55",
+      "broadcastAddress": "255.255.255.255",
+      "requestTimeout": 5000,
+      "powerOnDelay": 10000
     }
-]
-````
+  ]
+}
+```
 
-## Controlling Your Display
-Currently, `homebridge-vizio` only supports turning your display on and off. As Apple adds more service capabilities and accessory types to HomeKit, `homebridge-vizio` can grow to support more functionality.
+The platform `name` is just the plugin or child bridge label. Each entry under `devices` is published as its own external HomeKit TV accessory. The `mac` field is optional, but recommended if your display needs Wake-on-LAN to turn on from sleep.
 
-## How it Works
-`homebridge-vizio` is based on [`vizio-smart-cast`](https://github.com/heathbar/vizio-smart-cast/blob/master/README.md) by [Heath Paddock](https://github.com/heathbar). Many thanks to him for his excellent work.
+When `mac` is set, the plugin uses Wake-on-LAN for power on, waits for the display to wake, then checks the Vizio power state. It only sends a SmartCast power-on command if the display answers and still reports inactive.
+
+## Adding To HomeKit
+
+TV accessories are published externally because HomeKit expects one TV per bridge. After Homebridge restarts, add the TV manually in the Home app:
+
+1. Add Accessory.
+2. Choose More Options.
+3. Select the Vizio TV.
+4. Use your normal Homebridge setup code.
+
+If you previously used this plugin as a Switch accessory, remove that old accessory from HomeKit before adding the TV.
+
+## CLI Pairing
+
+The Homebridge UI is the recommended setup path, but the CLI pairing helper still works:
+
+```bash
+node node_modules/homebridge-vizio/setup.js
+```
+
+## SmartCast API
+
+The plugin uses the same Vizio SmartCast endpoints and key command codes documented by `vizio-smart-cast`, but implements the small subset it needs with Node built-ins so the dependency tree stays clean.

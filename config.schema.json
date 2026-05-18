@@ -1,0 +1,102 @@
+{
+  "pluginAlias": "VizioDisplay",
+  "pluginType": "platform",
+  "singular": true,
+  "customUi": true,
+  "customUiPath": "./homebridge-ui",
+  "fixArrays": true,
+  "strictValidation": true,
+  "headerDisplay": "Expose Vizio SmartCast displays as separate external HomeKit Television accessories.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "Homebridge Vizio"
+      },
+      "devices": {
+        "title": "Displays",
+        "type": "array",
+        "items": {
+          "title": "Display",
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Display Name",
+              "type": "string",
+              "default": "Vizio Display"
+            },
+            "address": {
+              "title": "Display Address",
+              "type": "string",
+              "placeholder": "192.168.1.59 or viziocasttv.local"
+            },
+            "token": {
+              "title": "Access Token",
+              "type": "string",
+              "format": "password"
+            },
+            "mac": {
+              "title": "MAC Address",
+              "type": "string",
+              "placeholder": "00:11:22:33:44:55",
+              "pattern": "^$|^([A-Fa-f0-9]{2}[:-]){5}[A-Fa-f0-9]{2}$"
+            },
+            "broadcastAddress": {
+              "title": "Wake-on-LAN Broadcast Address",
+              "type": "string",
+              "default": "255.255.255.255"
+            },
+            "requestTimeout": {
+              "title": "Request Timeout",
+              "type": "integer",
+              "default": 5000,
+              "minimum": 1000,
+              "maximum": 30000
+            },
+            "powerOnDelay": {
+              "title": "Power On Delay",
+              "type": "integer",
+              "default": 10000,
+              "minimum": 0,
+              "maximum": 30000
+            }
+          },
+          "required": [
+            "name",
+            "address"
+          ]
+        }
+      }
+    }
+  },
+  "layout": [
+    "name",
+    {
+      "key": "devices",
+      "type": "tabarray",
+      "title": "{{ value.name || 'Display' }}",
+      "items": [
+        "devices[].name",
+        "devices[].address",
+        {
+          "key": "devices[].token",
+          "type": "password"
+        },
+        {
+          "type": "fieldset",
+          "title": "Wake-on-LAN",
+          "expandable": true,
+          "expanded": false,
+          "items": [
+            "devices[].mac",
+            "devices[].broadcastAddress",
+            "devices[].powerOnDelay"
+          ]
+        },
+        "devices[].requestTimeout"
+      ]
+    }
+  ]
+}
