@@ -61,6 +61,13 @@
               "default": 10000,
               "minimum": 0,
               "maximum": 30000
+            },
+            "pollInterval": {
+              "title": "Power Poll Interval",
+              "type": "integer",
+              "default": 10000,
+              "minimum": 5000,
+              "maximum": 60000
             }
           },
           "required": [
@@ -95,7 +102,8 @@
             "devices[].powerOnDelay"
           ]
         },
-        "devices[].requestTimeout"
+        "devices[].requestTimeout",
+        "devices[].pollInterval"
       ]
     }
   ]

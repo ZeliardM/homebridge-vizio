@@ -9,6 +9,8 @@ const INPUT_IDENTIFIER = 1;
 const WAKE_GRACE_PERIOD = 60000;
 const OFF_SETTLE_PERIOD = 30000;
 const ACTIVE_CACHE_TTL = 10000;
+const DEFAULT_POWER_POLL_INTERVAL = 10000;
+const MIN_POWER_POLL_INTERVAL = 5000;
 
 let Service;
 let Characteristic;
@@ -119,6 +121,8 @@ class VizioTelevisionAccessory {
     this.activeStateUpdatedAt = 0;
     this.powerCommand = null;
     this.powerCommandDesiredState = null;
+    this.powerPollTimer = null;
+    this.powerPollInFlight = false;
     this.client = new VizioClient(config.address, config.token, {
       timeout: config.requestTimeout,
     });
@@ -127,6 +131,7 @@ class VizioTelevisionAccessory {
     this.configureTelevisionService();
     this.configureInputSourceService();
     this.removeUnsupportedServices();
+    this.startPowerPolling();
   }
 
   configureInformationService() {
@@ -358,6 +363,54 @@ class VizioTelevisionAccessory {
       });
   }
 
+  startPowerPolling() {
+    const pollInterval = Math.max(
+      Number(this.config.pollInterval) || DEFAULT_POWER_POLL_INTERVAL,
+      MIN_POWER_POLL_INTERVAL,
+    );
+
+    this.powerPollTimer = setInterval(() => {
+      this.pollPowerState();
+    }, pollInterval);
+
+    if (this.powerPollTimer.unref) {
+      this.powerPollTimer.unref();
+    }
+
+    setTimeout(() => this.pollPowerState(), Math.min(5000, pollInterval)).unref?.();
+  }
+
+  pollPowerState() {
+    if (this.powerCommand || this.powerPollInFlight) {
+      return;
+    }
+
+    this.powerPollInFlight = true;
+    const previousState = this.activeState;
+
+    this.getReportedActive()
+      .then((isOn) => {
+        if (previousState === isOn) {
+          return;
+        }
+
+        if (previousState !== null) {
+          this.log.info(`Device ${this.name}: detected manual power ${isOn ? 'on' : 'off'}.`);
+        }
+
+        this.televisionService.updateCharacteristic(
+          Characteristic.Active,
+          isOn ? Characteristic.Active.ACTIVE : Characteristic.Active.INACTIVE,
+        );
+      })
+      .catch((error) => {
+        this.log.debug(`Device ${this.name}: power poll failed: ${formatError(error)}`);
+      })
+      .finally(() => {
+        this.powerPollInFlight = false;
+      });
+  }
+
   isWakePending() {
     return Date.now() < this.pendingWakeUntil;
   }
@@ -396,6 +449,7 @@ function normalizeDevice(device) {
     broadcastAddress: device.broadcastAddress || '255.255.255.255',
     requestTimeout: Number(device.requestTimeout) || 5000,
     powerOnDelay: Number(device.powerOnDelay) || 10000,
+    pollInterval: Math.max(Number(device.pollInterval) || DEFAULT_POWER_POLL_INTERVAL, MIN_POWER_POLL_INTERVAL),
   };
 }
 

@@ -76,6 +76,11 @@
       </div>
     </div>
 
+    <div class="mb-3">
+      <label class="form-label" for="pollInterval">Power Poll Interval</label>
+      <input class="form-control" id="pollInterval" name="pollInterval" min="5000" max="60000" step="1000" type="number">
+    </div>
+
   </form>
 
   <hr>
@@ -104,6 +109,7 @@
       broadcastAddress: '255.255.255.255',
       requestTimeout: 5000,
       powerOnDelay: 10000,
+      pollInterval: 10000,
     };
     const DEFAULT_CONFIG = {
       platform: 'VizioDisplay',
@@ -293,6 +299,7 @@
         broadcastAddress: device.broadcastAddress,
         requestTimeout: device.requestTimeout,
         powerOnDelay: device.powerOnDelay,
+        pollInterval: device.pollInterval,
       };
 
       for (const [key, value] of Object.entries(values)) {
@@ -319,6 +326,7 @@
       device.broadcastAddress = data.get('broadcastAddress') || DEFAULT_DEVICE.broadcastAddress;
       device.requestTimeout = numberOrDefault(data.get('requestTimeout'), DEFAULT_DEVICE.requestTimeout);
       device.powerOnDelay = numberOrDefault(data.get('powerOnDelay'), DEFAULT_DEVICE.powerOnDelay);
+      device.pollInterval = numberOrDefault(data.get('pollInterval'), DEFAULT_DEVICE.pollInterval);
       config.name = platformNameInput.value || DEFAULT_CONFIG.name;
 
       renderDeviceSelector();
