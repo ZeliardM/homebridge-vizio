@@ -49,21 +49,21 @@
               "default": "255.255.255.255"
             },
             "requestTimeout": {
-              "title": "Request Timeout",
+              "title": "Request Timeout (ms)",
               "type": "integer",
               "default": 5000,
               "minimum": 1000,
               "maximum": 30000
             },
             "powerOnDelay": {
-              "title": "Power On Delay",
+              "title": "Power On Delay (ms)",
               "type": "integer",
               "default": 10000,
               "minimum": 0,
               "maximum": 30000
             },
             "pollInterval": {
-              "title": "Power Poll Interval",
+              "title": "Power Poll Interval (ms)",
               "type": "integer",
               "default": 10000,
               "minimum": 5000,

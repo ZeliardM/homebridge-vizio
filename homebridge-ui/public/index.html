@@ -66,18 +66,18 @@
 
     <div class="row">
       <div class="mb-3 col-12 col-md-6">
-        <label class="form-label" for="requestTimeout">Request Timeout</label>
+        <label class="form-label" for="requestTimeout">Request Timeout (ms)</label>
         <input class="form-control" id="requestTimeout" name="requestTimeout" min="1000" max="30000" step="500" type="number">
       </div>
 
       <div class="mb-3 col-12 col-md-6">
-        <label class="form-label" for="powerOnDelay">Power On Delay</label>
+        <label class="form-label" for="powerOnDelay">Power On Delay (ms)</label>
         <input class="form-control" id="powerOnDelay" name="powerOnDelay" min="0" max="30000" step="500" type="number">
       </div>
     </div>
 
     <div class="mb-3">
-      <label class="form-label" for="pollInterval">Power Poll Interval</label>
+      <label class="form-label" for="pollInterval">Power Poll Interval (ms)</label>
       <input class="form-control" id="pollInterval" name="pollInterval" min="5000" max="60000" step="1000" type="number">
     </div>
 
@@ -251,22 +251,52 @@
     });
 
     function normalizeConfig(rawConfig) {
+      const raw = rawConfig || {};
       const nextConfig = {
-        ...clone(DEFAULT_CONFIG),
-        ...(rawConfig || {}),
         platform: 'VizioDisplay',
+        name: raw.name || DEFAULT_CONFIG.name,
+        devices: normalizeDevices(raw),
       };
 
-      if (!Array.isArray(nextConfig.devices) || nextConfig.devices.length === 0) {
-        nextConfig.devices = [{ ...DEFAULT_DEVICE }];
-      } else {
-        nextConfig.devices = nextConfig.devices.map((device) => ({
-          ...DEFAULT_DEVICE,
-          ...device,
-        }));
+      if (raw._bridge) {
+        nextConfig._bridge = raw._bridge;
       }
 
       return nextConfig;
+    }
+
+    function normalizeDevices(rawConfig) {
+      if (Array.isArray(rawConfig.devices) && rawConfig.devices.length > 0) {
+        return rawConfig.devices.map(normalizeDevice);
+      }
+
+      if (rawConfig.address || rawConfig.token || rawConfig.mac) {
+        return [normalizeDevice({
+          name: rawConfig.deviceName || DEFAULT_DEVICE.name,
+          address: rawConfig.address,
+          token: rawConfig.token,
+          mac: rawConfig.mac,
+          broadcastAddress: rawConfig.broadcastAddress,
+          requestTimeout: rawConfig.requestTimeout,
+          powerOnDelay: rawConfig.powerOnDelay,
+          pollInterval: rawConfig.pollInterval,
+        })];
+      }
+
+      return [{ ...DEFAULT_DEVICE }];
+    }
+
+    function normalizeDevice(device) {
+      const { platform, _bridge, ...cleanDevice } = device || {};
+      const normalized = { ...DEFAULT_DEVICE };
+
+      for (const [key, value] of Object.entries(cleanDevice)) {
+        if (value !== undefined && value !== null) {
+          normalized[key] = value;
+        }
+      }
+
+      return normalized;
     }
 
     function render() {
